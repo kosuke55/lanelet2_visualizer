@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Lanelet2 Map Viewer</title>
+    <style>
+        body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+        .container {
+            display: flex;
+            gap: 20px;
+        }
+        .sidebar {
+            width: 300px;
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 5px;
+            height: calc(100vh - 80px);
+            overflow-y: auto;
+        }
+        .main-content {
+            flex-grow: 1;
+        }
+        #controls {
+            margin-bottom: 20px;
+        }
+        #directory-list {
+            margin-bottom: 20px;
+        }
+        .directory-item, .file-item {
+            padding: 8px;
+            margin: 4px 0;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .directory-item:hover {
+            background: #e0e0e0;
+        }
+        .file-item {
+            color: #2196F3;
+        }
+        .file-item:hover {
+            text-decoration: underline;
+        }
+        #map-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: 20px;
+        }
+        .map-container {
+            position: relative;
+            height: 400px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        .map-container.fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw !important;
+            height: 100vh !important;
+            z-index: 1000;
+            border: none;
+            border-radius: 0;
+        }
+        .map-container.fullscreen canvas {
+            width: 100vw;
+            height: 100vh;
+        }
+        .close-button {
+            display: none;
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 1001;
+        }
+        .map-container.fullscreen .close-button {
+            display: block;
+        }
+        .map-title {
+            text-align: center;
+            margin: 5px 0;
+            font-weight: bold;
+        }
+        .breadcrumb {
+            margin-bottom: 10px;
+            padding: 8px;
+            background: #fff;
+            border-radius: 4px;
+        }
+        .breadcrumb a {
+            color: #2196F3;
+            text-decoration: none;
+        }
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <div id="controls">
+                <input type="text" id="directory" placeholder="ディレクトリパス" value=".">
+                <button onclick="loadContents()">移動</button>
+            </div>
+            <div class="breadcrumb" id="breadcrumb"></div>
+            <div id="directory-list"></div>
+        </div>
+        <div class="main-content">
+            <div id="map-grid"></div>
+        </div>
+    </div>
+
+    <script>
+        let maps = {};
+        let currentPath = '.';
+        let mapStates = {};  // 各マップの状態を保持
+
+        function initMapState(mapId, bounds) {
+            mapStates[mapId] = {
+                scale: 1.0,
+                offsetX: 0,
+                offsetY: 0,
+                bounds: bounds
+            };
+        }
+
+        function handleWheel(event, mapId) {
+            event.preventDefault();
+            const state = mapStates[mapId];
+            const rect = event.target.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+
+            // ズーム前の位置を計算
+            const beforeZoomX = (x - state.offsetX) / state.scale;
+            const beforeZoomY = (y - state.offsetY) / state.scale;
+
+            // スケールを更新
+            const zoomFactor = event.deltaY > 0 ? 0.9 : 1.1;
+            state.scale *= zoomFactor;
+
+            // ズーム後の位置を計算
+            const afterZoomX = (x - state.offsetX) / state.scale;
+            const afterZoomY = (y - state.offsetY) / state.scale;
+
+            // オフセットを調整
+            state.offsetX += (afterZoomX - beforeZoomX) * state.scale;
+            state.offsetY += (afterZoomY - beforeZoomY) * state.scale;
+
+            // 再描画
+            redrawMap(mapId);
+        }
+
+        let isDragging = false;
+        let lastX = 0;
+        let lastY = 0;
+
+        function handleMouseDown(event, mapId) {
+            if (event.ctrlKey || event.metaKey) {
+                // Ctrl/Cmdキーを押しながらクリックで拡大
+                const state = mapStates[mapId];
+                const rect = event.target.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                const y = event.clientY - rect.top;
+
+                // ズーム前の位置を計算
+                const beforeZoomX = (x - state.offsetX) / state.scale;
+                const beforeZoomY = (y - state.offsetY) / state.scale;
+
+                // スケールを更新
+                state.scale *= 1.5;  // 1.5倍に拡大
+
+                // ズーム後の位置を計算
+                const afterZoomX = (x - state.offsetX) / state.scale;
+                const afterZoomY = (y - state.offsetY) / state.scale;
+
+                // オフセットを調整
+                state.offsetX += (afterZoomX - beforeZoomX) * state.scale;
+                state.offsetY += (afterZoomY - beforeZoomY) * state.scale;
+
+                // 再描画
+                redrawMap(mapId);
+            } else {
+                // 通常のドラッグ処理
+                isDragging = true;
+                lastX = event.clientX;
+                lastY = event.clientY;
+                event.target.style.cursor = 'grabbing';
+            }
+        }
+
+        function handleMouseMove(event, mapId) {
+            if (!isDragging) return;
+            
+            const state = mapStates[mapId];
+            const dx = event.clientX - lastX;
+            const dy = event.clientY - lastY;
+            
+            state.offsetX += dx;
+            state.offsetY += dy;
+            
+            lastX = event.clientX;
+            lastY = event.clientY;
+            
+            redrawMap(mapId);
+        }
+
+        function handleMouseUp(event, mapId) {
+            isDragging = false;
+            event.target.style.cursor = 'pointer';
+        }
+
+        function redrawMap(mapId) {
+            const canvas = maps[mapId];
+            const ctx = canvas.getContext('2d');
+            const state = mapStates[mapId];
+            
+            // キャンバスをクリア
+            ctx.fillStyle = 'white';  // 背景を白に設定
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 変換行列をリセット
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            
+            // 新しい変換を適用
+            ctx.translate(state.offsetX, state.offsetY);
+            ctx.scale(state.scale, state.scale);
+            
+            // laneletsを再描画
+            const transform = createTransform(state.bounds, canvas.width, canvas.height);
+            state.lanelets.forEach(lanelet => {
+                drawLanelet(ctx, lanelet, transform);
+            });
+        }
+
+        function drawLanelet(ctx, lanelet, transform) {
+            // 左境界線を黒で描画
+            if (lanelet.left.length > 0) {
+                ctx.beginPath();
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 2;
+                const firstPoint = transform(lanelet.left[0][0], lanelet.left[0][1]);
+                ctx.moveTo(firstPoint.x, firstPoint.y);
+                for (let i = 1; i < lanelet.left.length; i++) {
+                    const point = transform(lanelet.left[i][0], lanelet.left[i][1]);
+                    ctx.lineTo(point.x, point.y);
+                }
+                ctx.stroke();
+            }
+
+            // 右境界線を黒で描画
+            if (lanelet.right.length > 0) {
+                ctx.beginPath();
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 2;
+                const firstPoint = transform(lanelet.right[0][0], lanelet.right[0][1]);
+                ctx.moveTo(firstPoint.x, firstPoint.y);
+                for (let i = 1; i < lanelet.right.length; i++) {
+                    const point = transform(lanelet.right[i][0], lanelet.right[i][1]);
+                    ctx.lineTo(point.x, point.y);
+                }
+                ctx.stroke();
+            }
+
+            // 中心線を薄いグレーで描画
+            if (lanelet.center.length > 0) {
+                ctx.beginPath();
+                ctx.strokeStyle = '#999999';  // グレー
+                ctx.lineWidth = 0.5;  // 線を細く
+                const firstPoint = transform(lanelet.center[0][0], lanelet.center[0][1]);
+                ctx.moveTo(firstPoint.x, firstPoint.y);
+                for (let i = 1; i < lanelet.center.length; i++) {
+                    const point = transform(lanelet.center[i][0], lanelet.center[i][1]);
+                    ctx.lineTo(point.x, point.y);
+                }
+                ctx.stroke();
+            }
+        }
+
+        function createTransform(bounds, width, height, padding = 50) {
+            const xScale = (width - 2 * padding) / (bounds.max_x - bounds.min_x);
+            const yScale = (height - 2 * padding) / (bounds.max_y - bounds.min_y);
+            const scale = Math.min(xScale, yScale);
+
+            return (x, y) => {
+                return {
+                    x: padding + (x - bounds.min_x) * scale,
+                    y: height - (padding + (y - bounds.min_y) * scale)
+                };
+            };
+        }
+
+        async function loadContents() {
+            const directory = document.getElementById('directory').value;
+            const response = await fetch('/list_contents', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ directory })
+            });
+            
+            if (!response.ok) {
+                alert('ディレクトリの読み込みに失敗しました');
+                return;
+            }
+
+            const contents = await response.json();
+            currentPath = contents.current_dir;
+            
+            // パンくずリストを更新
+            const breadcrumb = document.getElementById('breadcrumb');
+            const pathParts = contents.current_dir.split('/');
+            let breadcrumbHtml = '';
+            let currentPathBuild = '';
+            
+            pathParts.forEach((part, index) => {
+                if (part) {
+                    currentPathBuild += '/' + part;
+                    breadcrumbHtml += `<a href="#" onclick="navigateTo('${currentPathBuild}')">${part}</a>`;
+                    if (index < pathParts.length - 1) {
+                        breadcrumbHtml += ' / ';
+                    }
+                }
+            });
+            breadcrumb.innerHTML = breadcrumbHtml;
+
+            // ディレクトリ一覧を更新
+            const directoryList = document.getElementById('directory-list');
+            let listHtml = '';
+            
+            if (contents.parent_dir !== contents.current_dir) {
+                listHtml += `<div class="directory-item" onclick="navigateTo('${contents.parent_dir}')">..</div>`;
+            }
+            
+            contents.directories.forEach(dir => {
+                listHtml += `<div class="directory-item" onclick="navigateTo('${dir.path}')">${dir.name}/</div>`;
+            });
+            
+            contents.osm_files.forEach(file => {
+                listHtml += `<div class="file-item" onclick="loadSingleMap('${file.path}')">${file.name}</div>`;
+            });
+            
+            directoryList.innerHTML = listHtml;
+
+            // 現在のディレクトリのマップを読み込む
+            loadMaps();
+        }
+
+        async function navigateTo(path) {
+            document.getElementById('directory').value = path;
+            await loadContents();
+        }
+
+        async function loadSingleMap(path) {
+            const directory = path.substring(0, path.lastIndexOf('/'));
+            document.getElementById('directory').value = directory;
+            await loadContents();
+        }
+
+        async function loadMaps() {
+            const directory = document.getElementById('directory').value;
+            console.log('Loading maps from directory:', directory);
+            
+            const response = await fetch('/list_maps', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ directory })
+            });
+            
+            if (!response.ok) {
+                console.error('Failed to load maps:', response.status, response.statusText);
+                alert('マップの読み込みに失敗しました');
+                return;
+            }
+
+            const mapData = await response.json();
+            console.log('Received map data:', mapData);
+            
+            const mapGrid = document.getElementById('map-grid');
+            mapGrid.innerHTML = '';
+
+            // 既存のマップインスタンスをクリーンアップ
+            maps = {};
+            mapStates = {};
+
+            mapData.forEach((file, index) => {
+                console.log(`Processing map ${index}:`, file.name);
+                
+                const { container, mapDiv } = createMapContainer(file.name);
+                
+                const canvas = document.createElement('canvas');
+                const mapId = `map-${index}`;
+                canvas.id = mapId;
+                
+                // イベントリスナーを追加
+                canvas.addEventListener('wheel', (e) => handleWheel(e, mapId));
+                canvas.addEventListener('mousedown', (e) => handleMouseDown(e, mapId));
+                canvas.addEventListener('mousemove', (e) => handleMouseMove(e, mapId));
+                canvas.addEventListener('mouseup', (e) => handleMouseUp(e, mapId));
+                canvas.addEventListener('mouseleave', (e) => handleMouseUp(e, mapId));
+                
+                mapDiv.appendChild(canvas);
+                mapGrid.appendChild(container);
+
+                // Canvasのサイズを設定
+                canvas.width = mapDiv.clientWidth;
+                canvas.height = mapDiv.clientHeight;
+                const ctx = canvas.getContext('2d');
+
+                // 背景を白に設定
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                const lanelets = file.data.lanelets;
+                console.log(`Number of lanelets in ${file.name}:`, lanelets.length);
+
+                if (lanelets.length > 0) {
+                    // マップの状態を初期化
+                    initMapState(mapId, file.data.bounds);
+                    mapStates[mapId].lanelets = lanelets;
+                    
+                    const transform = createTransform(file.data.bounds, canvas.width, canvas.height);
+                    lanelets.forEach(lanelet => {
+                        console.log(`Drawing lanelet ${lanelet.id}`);
+                        drawLanelet(ctx, lanelet, transform);
+                    });
+                }
+
+                maps[mapId] = canvas;
+            });
+        }
+
+        // 初期読み込み
+        loadContents();
+
+        // ウィンドウリサイズ時にキャンバスを再描画
+        window.addEventListener('resize', () => {
+            loadMaps();
+        });
+
+        // マップコンテナにヘルプテキストを追加
+        function createMapContainer(title) {
+            const container = document.createElement('div');
+            container.style.position = 'relative';
+            
+            const titleDiv = document.createElement('div');
+            titleDiv.className = 'map-title';
+            titleDiv.textContent = title;
+            
+            const mapDiv = document.createElement('div');
+            mapDiv.className = 'map-container';
+
+            const closeButton = document.createElement('button');
+            closeButton.className = 'close-button';
+            closeButton.textContent = '閉じる';
+            closeButton.onclick = (e) => {
+                e.stopPropagation();
+                exitFullscreen(mapDiv);
+            };
+            
+            mapDiv.onclick = () => enterFullscreen(mapDiv);
+            
+            container.appendChild(titleDiv);
+            container.appendChild(mapDiv);
+            mapDiv.appendChild(closeButton);
+            
+            return { container, mapDiv };
+        }
+
+        function enterFullscreen(mapDiv) {
+            if (!mapDiv.classList.contains('fullscreen')) {
+                mapDiv.classList.add('fullscreen');
+                const canvas = mapDiv.querySelector('canvas');
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                const mapId = canvas.id;
+                redrawMap(mapId);
+            }
+        }
+
+        function exitFullscreen(mapDiv) {
+            if (mapDiv.classList.contains('fullscreen')) {
+                mapDiv.classList.remove('fullscreen');
+                const canvas = mapDiv.querySelector('canvas');
+                canvas.width = mapDiv.clientWidth;
+                canvas.height = 400;
+                const mapId = canvas.id;
+                redrawMap(mapId);
+            }
+        }
+    </script>
+</body>
+</html> 
