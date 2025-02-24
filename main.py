@@ -10,6 +10,7 @@ import lanelet2.io
 import lanelet2.routing
 import lanelet2.traffic_rules
 from autoware_lanelet2_extension_python.projection import MGRSProjector
+from autoware_lanelet2_extension_python.regulatory_elements import DetectionArea
 
 app = Flask(__name__)
 
@@ -36,7 +37,8 @@ def load_osm_file(file_path):
             
             map_data = {
                 'lanelets': [],
-                'stop_lines': [],  # 停止線の情報を追加
+                'stop_lines': [],
+                'detection_areas': [],  # detection_areaの情報を追加
                 'bounds': {
                     'min_x': float('inf'),
                     'min_y': float('inf'),
@@ -160,8 +162,38 @@ def load_osm_file(file_path):
                     print(f"Error processing line string: {str(e)}")
                     continue
             
+            # detection_areaの取得
+            for regulatory_element in lanelet_map.regulatoryElementLayer:
+                try:
+                    if isinstance(regulatory_element, DetectionArea):
+                        detection_area_points = []
+                        areas = regulatory_element.detectionAreas()
+                        for area in areas:
+                            area_points = []
+                            for point in area:
+                                try:
+                                    x = float(point.x)
+                                    y = float(point.y)
+                                    area_points.append([x, y])
+                                    map_data['bounds']['min_x'] = min(map_data['bounds']['min_x'], x)
+                                    map_data['bounds']['min_y'] = min(map_data['bounds']['min_y'], y)
+                                    map_data['bounds']['max_x'] = max(map_data['bounds']['max_x'], x)
+                                    map_data['bounds']['max_y'] = max(map_data['bounds']['max_y'], y)
+                                except (AttributeError, ValueError) as e:
+                                    print(f"Error processing detection area point: {str(e)}")
+                                    continue
+                            if area_points:
+                                detection_area_points.append(area_points)
+                        if detection_area_points:
+                            map_data['detection_areas'].append(detection_area_points)
+                except Exception as e:
+                    print(f"Error processing regulatory element: {str(e)}")
+                    print(traceback.format_exc())
+                    continue
+            
             print(f"Total lanelets processed: {len(map_data['lanelets'])}")
             print(f"Total stop lines processed: {len(map_data['stop_lines'])}")
+            print(f"Total detection areas processed: {len(map_data['detection_areas'])}")
             if map_data['lanelets']:
                 print(f"Map bounds: {map_data['bounds']}")
             return map_data

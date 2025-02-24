@@ -137,7 +137,8 @@
                 offsetY: 0,
                 bounds: bounds,
                 lanelets: [],
-                stop_lines: []  // 停止線の情報を追加
+                stop_lines: [],
+                detection_areas: []  // detection_areaの情報を追加
             };
         }
 
@@ -286,13 +287,37 @@
             }
         }
 
+        function drawDetectionArea(ctx, detectionArea, transform) {
+            detectionArea.forEach(area => {
+                if (area.length > 0) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = '#FF8C00';  // 濃いオレンジ色
+                    ctx.fillStyle = 'rgba(255, 140, 0, 0.2)';  // 半透明のオレンジ色
+                    ctx.lineWidth = 2;
+                    
+                    const firstPoint = transform(area[0][0], area[0][1]);
+                    ctx.moveTo(firstPoint.x, firstPoint.y);
+                    
+                    for (let i = 1; i < area.length; i++) {
+                        const point = transform(area[i][0], area[i][1]);
+                        ctx.lineTo(point.x, point.y);
+                    }
+                    
+                    // 最初の点に戻って閉じる
+                    ctx.closePath();
+                    ctx.fill();  // 塗りつぶし
+                    ctx.stroke();  // 輪郭線
+                }
+            });
+        }
+
         function redrawMap(mapId) {
             const canvas = maps[mapId];
             const ctx = canvas.getContext('2d');
             const state = mapStates[mapId];
             
             // キャンバスをクリア
-            ctx.fillStyle = 'white';  // 背景を白に設定
+            ctx.fillStyle = 'white';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
             // 変換行列をリセット
@@ -304,6 +329,13 @@
             
             // 変換関数を作成
             const transform = createTransform(state.bounds, canvas.width, canvas.height);
+
+            // detection_areaを描画（最初に描画して他の要素の下に表示）
+            if (state.detection_areas) {
+                state.detection_areas.forEach(detectionArea => {
+                    drawDetectionArea(ctx, detectionArea, transform);
+                });
+            }
 
             // laneletsを描画
             state.lanelets.forEach(lanelet => {
@@ -457,14 +489,17 @@
 
                 const lanelets = file.data.lanelets;
                 const stop_lines = file.data.stop_lines;  // 停止線の情報を取得
+                const detection_areas = file.data.detection_areas;  // detection_areaの情報を取得
                 console.log(`Number of lanelets in ${file.name}:`, lanelets.length);
                 console.log(`Number of stop lines in ${file.name}:`, stop_lines.length);
+                console.log(`Number of detection areas in ${file.name}:`, detection_areas.length);
 
                 if (lanelets.length > 0) {
                     // マップの状態を初期化
                     initMapState(mapId, file.data.bounds);
                     mapStates[mapId].lanelets = lanelets;
-                    mapStates[mapId].stop_lines = stop_lines;  // 停止線の情報を保存
+                    mapStates[mapId].stop_lines = stop_lines;
+                    mapStates[mapId].detection_areas = detection_areas;  // detection_areaの情報を保存
                     
                     const transform = createTransform(file.data.bounds, canvas.width, canvas.height);
                     
@@ -478,6 +513,12 @@
                     stop_lines.forEach(stopLine => {
                         console.log(`Drawing stop line`);
                         drawStopLine(ctx, stopLine, transform);
+                    });
+
+                    // detection_areaを描画
+                    detection_areas.forEach(detectionArea => {
+                        console.log(`Drawing detection area`);
+                        drawDetectionArea(ctx, detectionArea, transform);
                     });
                 }
 
