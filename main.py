@@ -36,6 +36,7 @@ def load_osm_file(file_path):
             
             map_data = {
                 'lanelets': [],
+                'stop_lines': [],  # 停止線の情報を追加
                 'bounds': {
                     'min_x': float('inf'),
                     'min_y': float('inf'),
@@ -133,8 +134,34 @@ def load_osm_file(file_path):
                 except Exception as e:
                     print(f"Error processing lanelet: {str(e)}")
                     continue
+
+            # 停止線の取得
+            for line_string in lanelet_map.lineStringLayer:
+                try:
+                    if hasattr(line_string, 'attributes'):
+                        attributes = line_string.attributes
+                        if 'type' in attributes and attributes['type'] == 'stop_line':
+                            stop_line_points = []
+                            for point in line_string:
+                                try:
+                                    x = float(point.x)
+                                    y = float(point.y)
+                                    stop_line_points.append([x, y])
+                                    map_data['bounds']['min_x'] = min(map_data['bounds']['min_x'], x)
+                                    map_data['bounds']['min_y'] = min(map_data['bounds']['min_y'], y)
+                                    map_data['bounds']['max_x'] = max(map_data['bounds']['max_x'], x)
+                                    map_data['bounds']['max_y'] = max(map_data['bounds']['max_y'], y)
+                                except (AttributeError, ValueError) as e:
+                                    print(f"Error processing stop line point: {str(e)}")
+                                    continue
+                            if stop_line_points:
+                                map_data['stop_lines'].append(stop_line_points)
+                except Exception as e:
+                    print(f"Error processing line string: {str(e)}")
+                    continue
             
             print(f"Total lanelets processed: {len(map_data['lanelets'])}")
+            print(f"Total stop lines processed: {len(map_data['stop_lines'])}")
             if map_data['lanelets']:
                 print(f"Map bounds: {map_data['bounds']}")
             return map_data

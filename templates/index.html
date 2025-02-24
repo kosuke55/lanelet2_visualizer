@@ -135,7 +135,9 @@
                 scale: 1.0,
                 offsetX: 0,
                 offsetY: 0,
-                bounds: bounds
+                bounds: bounds,
+                lanelets: [],
+                stop_lines: []  // 停止線の情報を追加
             };
         }
 
@@ -225,29 +227,6 @@
             event.target.style.cursor = 'pointer';
         }
 
-        function redrawMap(mapId) {
-            const canvas = maps[mapId];
-            const ctx = canvas.getContext('2d');
-            const state = mapStates[mapId];
-            
-            // キャンバスをクリア
-            ctx.fillStyle = 'white';  // 背景を白に設定
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // 変換行列をリセット
-            ctx.setTransform(1, 0, 0, 1, 0, 0);
-            
-            // 新しい変換を適用
-            ctx.translate(state.offsetX, state.offsetY);
-            ctx.scale(state.scale, state.scale);
-            
-            // laneletsを再描画
-            const transform = createTransform(state.bounds, canvas.width, canvas.height);
-            state.lanelets.forEach(lanelet => {
-                drawLanelet(ctx, lanelet, transform);
-            });
-        }
-
         function drawLanelet(ctx, lanelet, transform) {
             // 左境界線を黒で描画
             if (lanelet.left.length > 0) {
@@ -289,6 +268,53 @@
                     ctx.lineTo(point.x, point.y);
                 }
                 ctx.stroke();
+            }
+        }
+
+        function drawStopLine(ctx, stopLine, transform) {
+            if (stopLine.length > 0) {
+                ctx.beginPath();
+                ctx.strokeStyle = 'red';  // 停止線は赤色で表示
+                ctx.lineWidth = 3;  // 停止線は太めに
+                const firstPoint = transform(stopLine[0][0], stopLine[0][1]);
+                ctx.moveTo(firstPoint.x, firstPoint.y);
+                for (let i = 1; i < stopLine.length; i++) {
+                    const point = transform(stopLine[i][0], stopLine[i][1]);
+                    ctx.lineTo(point.x, point.y);
+                }
+                ctx.stroke();
+            }
+        }
+
+        function redrawMap(mapId) {
+            const canvas = maps[mapId];
+            const ctx = canvas.getContext('2d');
+            const state = mapStates[mapId];
+            
+            // キャンバスをクリア
+            ctx.fillStyle = 'white';  // 背景を白に設定
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 変換行列をリセット
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            
+            // 新しい変換を適用
+            ctx.translate(state.offsetX, state.offsetY);
+            ctx.scale(state.scale, state.scale);
+            
+            // 変換関数を作成
+            const transform = createTransform(state.bounds, canvas.width, canvas.height);
+
+            // laneletsを描画
+            state.lanelets.forEach(lanelet => {
+                drawLanelet(ctx, lanelet, transform);
+            });
+
+            // 停止線を描画
+            if (state.stop_lines) {
+                state.stop_lines.forEach(stopLine => {
+                    drawStopLine(ctx, stopLine, transform);
+                });
             }
         }
 
@@ -430,17 +456,28 @@
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
                 const lanelets = file.data.lanelets;
+                const stop_lines = file.data.stop_lines;  // 停止線の情報を取得
                 console.log(`Number of lanelets in ${file.name}:`, lanelets.length);
+                console.log(`Number of stop lines in ${file.name}:`, stop_lines.length);
 
                 if (lanelets.length > 0) {
                     // マップの状態を初期化
                     initMapState(mapId, file.data.bounds);
                     mapStates[mapId].lanelets = lanelets;
+                    mapStates[mapId].stop_lines = stop_lines;  // 停止線の情報を保存
                     
                     const transform = createTransform(file.data.bounds, canvas.width, canvas.height);
+                    
+                    // レーンレットを描画
                     lanelets.forEach(lanelet => {
                         console.log(`Drawing lanelet ${lanelet.id}`);
                         drawLanelet(ctx, lanelet, transform);
+                    });
+
+                    // 停止線を描画
+                    stop_lines.forEach(stopLine => {
+                        console.log(`Drawing stop line`);
+                        drawStopLine(ctx, stopLine, transform);
                     });
                 }
 
