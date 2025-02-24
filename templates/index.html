@@ -493,6 +493,16 @@
             loadMaps();
         });
 
+        // ESCキーでフルスクリーン解除
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const fullscreenMap = document.querySelector('.map-container.fullscreen');
+                if (fullscreenMap) {
+                    exitFullscreen(fullscreenMap);
+                }
+            }
+        });
+
         // マップコンテナにヘルプテキストを追加
         function createMapContainer(title) {
             const container = document.createElement('div');
