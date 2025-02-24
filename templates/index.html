@@ -496,7 +496,7 @@
             mapData.forEach((file, index) => {
                 console.log(`Processing map ${index}:`, file.name);
                 
-                const { container, mapDiv } = createMapContainer(file.name);
+                const { container, mapDiv } = createMapContainer(file.name, file.data);
                 
                 const canvas = document.createElement('canvas');
                 const mapId = `map-${index}`;
@@ -579,7 +579,7 @@
         });
 
         // マップコンテナにヘルプテキストを追加
-        function createMapContainer(title) {
+        function createMapContainer(title, fileData) {
             const container = document.createElement('div');
             container.style.position = 'relative';
             
@@ -604,20 +604,20 @@
             let legendHtml = '';
             
             // detection_areasが存在する場合のみ、その凡例を追加
-            if (file.data.detection_areas && file.data.detection_areas.length > 0) {
+            if (fileData.detection_areas && fileData.detection_areas.length > 0) {
                 legendHtml += `
                     <div class="legend-item">
                         <div class="legend-color detection-area"></div>
-                        <span>検知エリア (Detection Area)</span>
+                        <span>Detection Area</span>
                     </div>`;
             }
             
             // stop_linesが存在する場合のみ、その凡例を追加
-            if (file.data.stop_lines && file.data.stop_lines.length > 0) {
+            if (fileData.stop_lines && fileData.stop_lines.length > 0) {
                 legendHtml += `
                     <div class="legend-item">
                         <div class="legend-color stop-line"></div>
-                        <span>停止線 (Stop Line)</span>
+                        <span>Stop Line</span>
                     </div>`;
             }
             
@@ -628,7 +628,7 @@
             container.appendChild(titleDiv);
             container.appendChild(mapDiv);
             mapDiv.appendChild(closeButton);
-            mapDiv.appendChild(legend);  // 凡例は常に追加するが、CSSで表示制御
+            mapDiv.appendChild(legend);
             
             return { container, mapDiv };
         }
