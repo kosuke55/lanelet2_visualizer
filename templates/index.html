@@ -108,6 +108,40 @@
             height: 100%;
             cursor: pointer;
         }
+        .legend {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            z-index: 1000;
+            font-size: 12px;
+            display: none;
+        }
+        .map-container.fullscreen .legend {
+            display: block;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+        }
+        .legend-color {
+            width: 20px;
+            height: 3px;
+            margin-right: 8px;
+        }
+        .legend-color.detection-area {
+            height: 20px;
+            background: rgba(255, 140, 0, 0.2);
+            border: 2px solid #FF8C00;
+        }
+        .legend-color.stop-line {
+            background: red;
+            height: 3px;
+        }
     </style>
 </head>
 <body>
@@ -563,12 +597,38 @@
                 e.stopPropagation();
                 exitFullscreen(mapDiv);
             };
+
+            // 凡例を追加（フルスクリーン時のみ表示）
+            const legend = document.createElement('div');
+            legend.className = 'legend';
+            let legendHtml = '';
+            
+            // detection_areasが存在する場合のみ、その凡例を追加
+            if (file.data.detection_areas && file.data.detection_areas.length > 0) {
+                legendHtml += `
+                    <div class="legend-item">
+                        <div class="legend-color detection-area"></div>
+                        <span>検知エリア (Detection Area)</span>
+                    </div>`;
+            }
+            
+            // stop_linesが存在する場合のみ、その凡例を追加
+            if (file.data.stop_lines && file.data.stop_lines.length > 0) {
+                legendHtml += `
+                    <div class="legend-item">
+                        <div class="legend-color stop-line"></div>
+                        <span>停止線 (Stop Line)</span>
+                    </div>`;
+            }
+            
+            legend.innerHTML = legendHtml;
             
             mapDiv.onclick = () => enterFullscreen(mapDiv);
             
             container.appendChild(titleDiv);
             container.appendChild(mapDiv);
             mapDiv.appendChild(closeButton);
+            mapDiv.appendChild(legend);  // 凡例は常に追加するが、CSSで表示制御
             
             return { container, mapDiv };
         }
