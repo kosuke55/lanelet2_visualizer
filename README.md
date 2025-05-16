@@ -48,6 +48,7 @@ pip install -r requirements.txt
 
 1. アプリケーションの起動：
 ```bash
+souce <Autoware Workdpace>/install/setup.bash
 python3 main.py
 ```
 
@@ -70,11 +71,3 @@ http://localhost:5001
 - グレーの細線: レーンレットの中心線
 - 赤色の太線: 停止線
 - オレンジ色の半透明エリア: 検知エリア（detection area）
-
-## ライセンス
-
-MITライセンス
-
-## 作者
-
-[kosuke55](https://github.com/kosuke55) 
