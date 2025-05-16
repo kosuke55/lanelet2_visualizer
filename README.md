@@ -71,3 +71,6 @@ http://localhost:5001
 - グレーの細線: レーンレットの中心線
 - 赤色の太線: 停止線
 - オレンジ色の半透明エリア: 検知エリア（detection area）
+
+## 注意
+- 一部のArea, Polygon, Regulatory Elementの描画には対応しないてないです。簡易的な確認に使ってください。
