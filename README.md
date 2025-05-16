@@ -48,7 +48,7 @@ pip install -r requirements.txt
 
 1. アプリケーションの起動：
 ```bash
-souce <Autoware Workdpace>/install/setup.bash
+souce <Autoware Workspace>/install/setup.bash
 python3 main.py
 ```
 
